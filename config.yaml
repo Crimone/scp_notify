@@ -1,0 +1,29 @@
+wikidot:
+  # Wikidot用户名
+  username: ""
+  # Wikidot密码
+  password: ""
+  # rss地址，一般不需要修改
+  feed_url: "https://scp-wiki-cn.wikidot.com/feed/forum/posts.xml"
+
+email:
+  # SMTP地址，请先在qq邮箱设置中启动SMTP，qq邮箱的SMTP地址一般为: smtp.qq.com
+  smtp_server: ""
+  # SMTP端口，qq邮箱的SMTP地址一般为: 465
+  smtp_port: 
+  # 发送邮件提醒的邮箱地址
+  from_email: ""
+  # 发送邮件提醒的邮箱密码
+  password: ""
+  # 接受邮件的邮箱地址，任何情况下都建议把发件和收件设置为相同的邮箱（自己给自己发），极度不建议给其他邮箱发送，有被判定为大量发送垃圾邮件的风险
+  to_email: ""
+
+settings:
+  # 发帖记录数据库文件的位置，保持默认即可
+  history_path: "history.json"
+  # RSS历史记录的位置，保持默认即可
+  rss_history_path: "rss_history.json"
+  # RSS周期，单位为秒，默认为每一分钟RSS一次
+  rss_routine: 60
+  # wikidot发帖更新周期，单位为秒，默认为每五分钟更新一次
+  wikidot_routine: 300
