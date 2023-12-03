@@ -150,6 +150,132 @@ class RssChecker:
             ),
         )
 
+    def check_post(self,article,rss_history):
+        
+        title = article.find("title").text
+        link = article.find("link").text
+        author_name = article.find("wikidot:authorName").text
+        content = article.find("content:encoded").text.strip()
+        publish_date = article.find("pubDate").text
+
+        post_id = urlparse(link).fragment[5:]
+
+        publish_time = datetime.strptime(publish_date, "%a, %d %b %Y %H:%M:%S %z")
+
+        current_time = datetime.now(timezone.utc)
+        # 计算时间差
+        time_difference = (current_time - publish_time).total_seconds()
+
+        if post_id in rss_history:
+            return
+
+        # 大于五倍rss周期直接忽略
+        if time_difference > 5 * (self.config["settings"]["rss_routine"]):
+            rss_history[post_id] = "超过最长处理周期"
+            with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
+                json.dump(rss_history, file, ensure_ascii=False, indent=4)
+            return
+
+        tid = re.search(r"/t-(\d+)/", urlparse(link).path).group(1)
+        self.wikidot_login()
+
+        reply_post_req = self.s.get(link)
+
+        headers = {
+            "Host": "scp-wiki-cn.wikidot.com",
+            "Origin": "https://scp-wiki-cn.wikidot.com",
+            "Pragma": "no-cache",
+            "Referer": f"https://scp-wiki-cn.wikidot.com{urlparse(link).path}",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
+        # 发送 POST 请求
+        response = self.s.post(
+            "https://scp-wiki-cn.wikidot.com/ajax-module-connector.php",
+            headers=headers,
+            data={
+                "postId": post_id,
+                "t": tid,
+                "order": "",
+                "moduleName": "forum/ForumViewThreadPostsModule",
+                "wikidot_token7": self.s.cookies.get(
+                    "wikidot_token7", domain="scp-wiki-cn.wikidot.com"
+                ),
+            },
+        )
+
+        response_json = json.loads(response.text)
+        html_content = response_json["body"]
+        # Parsing the HTML content
+        soup = BeautifulSoup(html_content, "html.parser")
+        # Finding the specified element
+        target_element = soup.find(
+            "div", {"class": "post-container", "id": f"fpc-{post_id}"}
+        )
+
+        parents = target_element.find_parents()
+
+        with open(self.config["settings"]["history_path"], "r", encoding="utf-8") as file:
+            data_loaded = json.load(file)
+
+        post_ids = data_loaded.get("post_ids", [])
+        page_ids = data_loaded.get("page_ids", [])
+
+        # 首先检查最新的回复的所有父元素在不在post_ids中
+
+        for parent in parents:
+            parent_id = parent.get("id")
+
+            if parent_id and (parent_id.replace("fpc", "post") in post_ids):
+
+                parent_content = parent.find("div", {"id": parent_id.replace("fpc-", "post-content-")})
+
+                body=MIMEText(f'<div>{author_name}回复了你的帖子</div><p><a href="{link}">{link}</a></p>' + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:1em;">' + content.strip() + '</div>' + f'<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;margin:1em 3em;">{str(parent_content)}</div>', "html")
+
+                self.email_ntfy(
+                    f"{author_name}回复你: {title}……", body
+                )
+
+                rss_history[post_id] = "已发送提醒邮件"
+                with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
+                    json.dump(rss_history, file, ensure_ascii=False, indent=4)
+                return
+
+        # 之后检查整个回复帖的作者
+
+        soup = BeautifulSoup(reply_post_req.text, "html.parser")
+        username_tag = soup.select_one(
+            ".description-block.well .statistics span.printuser a:last-child"
+        )
+        if username_tag and username_tag.text == self.config["wikidot"]["username"]:
+
+            body=MIMEText(f'<div>{author_name}回复了你的主题</div><p><a href="{link}">{link}</a></p>' + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:1em;">' + content.strip() + '</div>', "html")
+
+            self.email_ntfy(f"{author_name}回复你: {title}……", body)
+            rss_history[post_id] = "已发送提醒邮件"
+            with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
+                json.dump(rss_history, file, ensure_ascii=False, indent=4)
+            return
+
+        # 最后检查所回复的文档
+
+        if (
+            urlparse(link).path.split("/")[-1]
+            and urlparse(link).path.split("/")[-1] in page_ids
+        ):
+
+            body=MIMEText(f'<div>{author_name}评论了你的文档</div><p><a href="{link}">{link}</a></p>' + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:1em;">' + content.strip() + '</div>', "html")
+
+            self.email_ntfy(f"{author_name}回复你: {title}……", body)
+            rss_history[post_id] = "已发送提醒邮件"
+            with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
+                json.dump(rss_history, file, ensure_ascii=False, indent=4)
+            return
+
     def check_rss_posts(self):
         # Logfile Save Location
         req = requests.get(self.config["wikidot"]["feed_url"])
@@ -162,129 +288,7 @@ class RssChecker:
             rss_history = json.load(file)
 
         for a in articles:
-            title = a.find("title").text
-            link = a.find("link").text
-            author_name = a.find("wikidot:authorName").text
-            content = a.find("content:encoded").text.strip()
-            publish_date = a.find("pubDate").text
-
-            post_id = urlparse(link).fragment[5:]
-
-            publish_time = datetime.strptime(publish_date, "%a, %d %b %Y %H:%M:%S %z")
-
-            current_time = datetime.now(timezone.utc)
-            # 计算时间差
-            time_difference = (current_time - publish_time).total_seconds()
-
-            if post_id in rss_history:
-                continue
-
-            # 大于五倍rss周期直接忽略
-            if time_difference > 5 * (self.config["settings"]["rss_routine"]):
-                rss_history[post_id] = "超过最长处理周期"
-                with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
-                    json.dump(rss_history, file, ensure_ascii=False, indent=4)
-                continue
-
-            tid = re.search(r"/t-(\d+)/", urlparse(link).path).group(1)
-            self.wikidot_login()
-
-            reply_post_req = self.s.get(link)
-
-            headers = {
-                "Host": "scp-wiki-cn.wikidot.com",
-                "Origin": "https://scp-wiki-cn.wikidot.com",
-                "Pragma": "no-cache",
-                "Referer": f"https://scp-wiki-cn.wikidot.com{urlparse(link).path}",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-
-            # 发送 POST 请求
-            response = self.s.post(
-                "https://scp-wiki-cn.wikidot.com/ajax-module-connector.php",
-                headers=headers,
-                data={
-                    "postId": post_id,
-                    "t": tid,
-                    "order": "",
-                    "moduleName": "forum/ForumViewThreadPostsModule",
-                    "wikidot_token7": self.s.cookies.get(
-                        "wikidot_token7", domain="scp-wiki-cn.wikidot.com"
-                    ),
-                },
-            )
-
-            response_json = json.loads(response.text)
-            html_content = response_json["body"]
-            # Parsing the HTML content
-            soup = BeautifulSoup(html_content, "html.parser")
-            # Finding the specified element
-            target_element = soup.find(
-                "div", {"class": "post-container", "id": f"fpc-{post_id}"}
-            )
-
-            parents = target_element.find_parents()
-
-            with open(self.config["settings"]["history_path"], "r", encoding="utf-8") as file:
-                data_loaded = json.load(file)
-
-            post_ids = data_loaded.get("post_ids", [])
-            page_ids = data_loaded.get("page_ids", [])
-
-            # 首先检查最新的回复的所有父元素在不在post_ids中
-
-            for parent in parents:
-                parent_id = parent.get("id")
-
-                if parent_id and (parent_id.replace("fpc", "post") in post_ids):
-
-                    parent_content = parent.find("div", {"id": parent_id.replace("fpc-", "post-content-")})
-
-                    body=MIMEText(f"<div>{author_name}回复了你的帖子\n{link}\n</div>" + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;">' + content.strip() + '</div>' + f'<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;margin:1em 3em;">{str(parent_content)}</div>', "html")
-
-                    self.email_ntfy(
-                        f"{author_name}回复你: {title}……", body
-                    )
-
-                    rss_history[post_id] = "已发送提醒邮件"
-                    with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
-                        json.dump(rss_history, file, ensure_ascii=False, indent=4)
-                    continue
-
-            # 之后检查整个回复帖的作者
-
-            soup = BeautifulSoup(reply_post_req.text, "html.parser")
-            username_tag = soup.select_one(
-                ".description-block.well .statistics span.printuser a:last-child"
-            )
-            if username_tag and username_tag.text == self.config["wikidot"]["username"]:
-
-                body=MIMEText(f"<div>{author_name}回复了你的主题\n{link}\n</div>" + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;">' + content.strip() + '</div>', "html")
-
-                self.email_ntfy(f"{author_name}回复你: {title}……", body)
-                rss_history[post_id] = "已发送提醒邮件"
-                with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
-                    json.dump(rss_history, file, ensure_ascii=False, indent=4)
-                continue
-
-            # 最后检查所回复的文档
-
-            if (
-                urlparse(link).path.split("/")[-1]
-                and urlparse(link).path.split("/")[-1] in page_ids
-            ):
-
-                body=MIMEText(f"<div>{author_name}评论了你的文档\n{link}\n</div>" + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;">' + content.strip() + '</div>', "html")
-
-                self.email_ntfy(f"{author_name}回复你: {title}……", body)
-                rss_history[post_id] = "已发送提醒邮件"
-                with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
-                    json.dump(rss_history, file, ensure_ascii=False, indent=4)
-                continue
+            self.check_post(article=a)
 
     def email_ntfy(self, title, body):
         # 邮件内容
