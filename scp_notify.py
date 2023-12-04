@@ -296,7 +296,7 @@ def run_wikidot_scraper(config):
         scraper = WikidotScraper(config)
         scraper.get_post_ids()
     except Exception as e:
-        logging.error(f"Wikidot Scraper 错误: {e}")
+        logging.warning(f"Wikidot Scraper 错误: {e}")
     finally:
         threading.Timer(config["settings"]["wikidot_routine"], run_wikidot_scraper, [config]).start()
 
@@ -305,7 +305,7 @@ def run_rss_checker(config):
         comparer = RssChecker(config)
         comparer.check_rss_posts()
     except Exception as e:
-        logging.error(f"RSS Checker 错误: {e}")
+        logging.warning(f"RSS Checker 错误: {e}")
     finally:
         threading.Timer(config["settings"]["rss_routine"], run_rss_checker, [config]).start()
 
