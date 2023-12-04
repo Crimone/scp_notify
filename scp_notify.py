@@ -55,43 +55,15 @@ class WikidotScraper:
             "X-Requested-With": "XMLHttpRequest",
         }
 
-        index = 1
-
-        post_ids = []
-        page_ids = []
+        # 获取cookie
 
         self.s.get(
             f"https://www.wikidot.com/user:info/{self.config['wikidot']['username']}"
         )
 
-        while True:
-            # 发送 POST 请求
-            response = self.s.post(
-                "https://www.wikidot.com/ajax-module-connector.php",
-                headers=headers,
-                data={
-                    "page": str(index),
-                    "userId": user_id,
-                    "moduleName": "userinfo/UserRecentPostsListModule",
-                    "wikidot_token7": self.s.cookies.get("wikidot_token7"),
-                },
-            )
-
-            response_json = json.loads(response.text)
-            html_content = response_json["body"]
-            # Parsing the HTML content
-            soup = BeautifulSoup(html_content, "html.parser")
-            # Finding the specified element
-            target_elements = soup.find_all("div", {"class": "post"})
-
-            if target_elements:
-                for target_element in target_elements:
-                    post_ids.append(target_element.get("id"))
-                index += 1
-            else:
-                break
-
         index = 1
+
+        page_ids = []
 
         while True:
             # 发送 POST 请求
@@ -126,12 +98,12 @@ class WikidotScraper:
             else:
                 break
 
-        data_to_save = {"post_ids": post_ids, "page_ids": page_ids}
+        data_to_save = {"page_ids": page_ids}
 
         with open(self.config["settings"]["history_path"], "w", encoding="utf-8") as file:
             json.dump(data_to_save, file, indent=4)
 
-        print("发帖记录遍历完成！")
+        print("发文记录遍历完成！")
 
 
 class RssChecker:
@@ -179,6 +151,8 @@ class RssChecker:
         tid = re.search(r"/t-(\d+)/", urlparse(link).path).group(1)
         self.wikidot_login()
 
+        # 获取cookie
+
         reply_post_req = self.s.get(link)
 
         headers = {
@@ -222,7 +196,6 @@ class RssChecker:
         with open(self.config["settings"]["history_path"], "r", encoding="utf-8") as file:
             data_loaded = json.load(file)
 
-        post_ids = data_loaded.get("post_ids", [])
         page_ids = data_loaded.get("page_ids", [])
 
         # 首先检查最新的回复的所有父元素在不在post_ids中
@@ -230,20 +203,21 @@ class RssChecker:
         for parent in parents:
             parent_id = parent.get("id")
 
-            if parent_id and (parent_id.replace("fpc", "post") in post_ids):
+            if parent_id:
 
-                parent_content = parent.find("div", {"id": parent_id.replace("fpc-", "post-content-")})
+                parent_usertag = parent.select_one(f'div#{parent_id.replace("fpc-", "post-")} .short span.printuser.avatarhover a:last-child')
 
-                body=MIMEText(f'<div>{author_name}回复了你的帖子</div><p><a href="{link}">{link}</a></p>' + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:1em;">' + content.strip() + '</div>' + f'<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;margin:1em 3em;">{str(parent_content)}</div>', "html")
+                if parent_usertag and parent_usertag.text == self.config["wikidot"]["username"]:
 
-                self.email_ntfy(
-                    f"{author_name}回复你: {title}……", body
-                )
-
-                rss_history[post_id] = "已发送提醒邮件"
-                with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
-                    json.dump(rss_history, file, ensure_ascii=False, indent=4)
-                return
+                    parent_content = parent.find("div", {"id": parent_id.replace("fpc-", "post-content-")})
+                    body=MIMEText(f'<div>{author_name}回复了你的帖子</div><p><a href="{link}">{link}</a></p>' + '<div style="border:1px dashed #999;background-color:#f4f4f4;padding:1em;">' + content.strip() + '</div>' + f'<div style="border:1px dashed #999;background-color:#f4f4f4;padding:0 1em;margin:1em 3em;">{str(parent_content)}</div>', "html")
+                    self.email_ntfy(
+                        f"{author_name}回复你: {title}……", body
+                    )
+                    rss_history[post_id] = "已发送提醒邮件"
+                    with open(self.config["settings"]["rss_history_path"], "w", encoding="utf-8") as file:
+                        json.dump(rss_history, file, ensure_ascii=False, indent=4)
+                    return
 
         # 之后检查整个回复帖的作者
 
@@ -288,7 +262,7 @@ class RssChecker:
             rss_history = json.load(file)
 
         for a in articles:
-            self.check_post(article=a)
+            self.check_post(article=a,rss_history=rss_history)
 
     def email_ntfy(self, title, body):
         # 邮件内容
@@ -343,8 +317,8 @@ def main():
         作者：Mercuresphere\n
         因为某些原因，本软件完全没有异常处理系统，请谅解。（反正遇到error也不会退出，没什么问题的）\n
         在使用之前请先打开config.yaml文件，按其中注释编辑好。\n
-        初次使用请运行: python scp_notify.py init 建立发帖记录数据库，发帖记录数据库默认五分钟更新一次，可手动运行init来更新。\n
-        发帖记录数据库建立完毕之后运行: python scp_notify.py rss 启动RSS回复提醒系统。
+        初次使用请运行: python scp_notify.py init 建立发文记录数据库，发文记录数据库默认半小时更新一次，可手动运行init来更新。\n
+        发文记录数据库建立完毕之后运行: python scp_notify.py rss 启动RSS回复提醒系统。
         '''
     )
 
