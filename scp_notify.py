@@ -317,7 +317,7 @@ def main():
         作者：Mercuresphere\n
         因为某些原因，本软件完全没有异常处理系统，请谅解。（反正遇到error也不会退出，没什么问题的）\n
         在使用之前请先打开config.yaml文件，按其中注释编辑好。\n
-        初次使用请运行: python scp_notify.py init 建立发文记录数据库，发文记录数据库默认五分钟更新一次，可手动运行init来更新。\n
+        初次使用请运行: python scp_notify.py init 建立发文记录数据库，发文记录数据库默认半小时更新一次，可手动运行init来更新。\n
         发文记录数据库建立完毕之后运行: python scp_notify.py rss 启动RSS回复提醒系统。
         '''
     )

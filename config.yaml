@@ -23,7 +23,7 @@ settings:
   history_path: "history.json"
   # RSS历史记录的位置，保持默认即可
   rss_history_path: "rss_history.json"
-  # RSS周期，单位为秒，默认为每一分钟RSS一次
-  rss_routine: 60
+  # RSS周期，单位为秒，默认为每五分钟RSS一次
+  rss_routine: 300
   # wikidot发文记录更新周期，单位为秒，默认为每半小时更新一次
   wikidot_routine: 1800
