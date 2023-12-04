@@ -291,23 +291,25 @@ class RssChecker:
         # 关闭连接
         server.quit()
 
-def run_wikidot_scraper(config):
+def run_wikidot_scraper(config, is_routine = False):
     try:
         scraper = WikidotScraper(config)
         scraper.get_post_ids()
     except Exception as e:
         logging.warning(f"Wikidot Scraper 错误: {e}")
     finally:
-        threading.Timer(config["settings"]["wikidot_routine"], run_wikidot_scraper, [config]).start()
+        if is_routine:
+            threading.Timer(config["settings"]["wikidot_routine"], run_wikidot_scraper, [config]).start()
 
-def run_rss_checker(config):
+def run_rss_checker(config, is_routine = False):
     try:
         comparer = RssChecker(config)
         comparer.check_rss_posts()
     except Exception as e:
         logging.warning(f"RSS Checker 错误: {e}")
     finally:
-        threading.Timer(config["settings"]["rss_routine"], run_rss_checker, [config]).start()
+        if is_routine:
+            threading.Timer(config["settings"]["rss_routine"], run_rss_checker, [config]).start()
 
 
 def main():
@@ -338,8 +340,8 @@ def main():
         run_wikidot_scraper(config)
     elif args.mode == "rss":
         print("启动SCP回复提醒系统，开始监听SCP中分RSS")
-        run_rss_checker(config)
-        run_wikidot_scraper(config)
+        run_rss_checker(config, is_routine = True)
+        run_wikidot_scraper(config, is_routine = True)
 
 
 if __name__ == "__main__":
