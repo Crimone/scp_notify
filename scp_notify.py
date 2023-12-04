@@ -334,8 +334,10 @@ def main():
         config = yaml.safe_load(file)
 
     if args.mode == "init":
+        print("SCP回复提醒系统初始化中……")
         run_wikidot_scraper(config)
     elif args.mode == "rss":
+        print("启动SCP回复提醒系统，开始监听SCP中分RSS")
         run_rss_checker(config)
         run_wikidot_scraper(config)
 

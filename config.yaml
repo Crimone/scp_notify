@@ -19,7 +19,7 @@ email:
   to_email: ""
 
 settings:
-  # 发帖记录数据库文件的位置，保持默认即可
+  # 发文记录数据库文件的位置，保持默认即可
   history_path: "history.json"
   # RSS历史记录的位置，保持默认即可
   rss_history_path: "rss_history.json"
